@@ -1,0 +1,15 @@
+{
+  "domain": "cex",
+  "name": "CeX Monitor",
+  "codeowners": [
+    "@BrunoCunha1983-creator"
+  ],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/BrunoCunha1983-creator/ha-cex",
+  "integration_type": "service",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/BrunoCunha1983-creator/ha-cex/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}
