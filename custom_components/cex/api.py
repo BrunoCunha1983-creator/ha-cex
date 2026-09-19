@@ -12,7 +12,7 @@ from html import unescape
 import json
 import re
 from typing import Any
-from urllib.parse import parse_qs, quote, urlencode, urljoin, urlparse
+from urllib.parse import parse_qs, quote, urljoin, urlparse
 
 from aiohttp import ClientError, ClientSession, ClientTimeout
 
@@ -188,7 +188,17 @@ class CexApiClient:
         self, query: str, count: int
     ) -> list[dict[str, Any]]:
         """Parse server-rendered CeX search results."""
-        raw = await self._get_html("/search", {"stext": query})
+        try:
+            raw = await self._get_html("/search", {"stext": query})
+        except CexApiError as first_error:
+            # A first visit to the storefront can set harmless routing/CDN
+            # cookies which some CeX edge configurations expect.
+            try:
+                await self._get_html("/")
+                raw = await self._get_html("/search", {"stext": query})
+            except CexApiError:
+                raise first_error
+
         products: dict[str, dict[str, Any]] = {}
 
         # Newer CeX/Nuxt pages commonly embed the same WSS product objects in
@@ -246,7 +256,16 @@ class CexApiClient:
                 if not product_id or product_id in products:
                     continue
 
-                name = _plain_text(match.group("body"))
+                body = match.group("body")
+                name = _plain_text(body)
+                if not name:
+                    alt_match = re.search(
+                        r'<img\\b[^>]*\\balt=["\\\'](?P<alt>[^"\\\']+)["\\\']',
+                        body,
+                        flags=re.I | re.S,
+                    )
+                    if alt_match:
+                        name = unescape(alt_match.group("alt")).strip()
                 if not name:
                     # Sometimes the image and product title use different links.
                     nearby = _plain_text(raw[match.end() : match.end() + 1200])
