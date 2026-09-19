@@ -1,0 +1,115 @@
+name: Sync from ha_apps
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 * * * *"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/sync-from-ha-apps.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cex-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout HACS repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout ha_apps source
+        uses: actions/checkout@v4
+        with:
+          repository: BrunoCunha1983-creator/ha_apps
+          ref: main
+          path: upstream
+          persist-credentials: false
+
+      - name: Sync CeX integration
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          rsync -a --delete             upstream/integrations/cex/custom_components/             custom_components/
+
+          cp upstream/integrations/cex/LICENSE LICENSE
+          cp upstream/integrations/cex/hacs.json hacs.json
+          cp upstream/integrations/cex/README.md README.md
+
+          python - <<'PY'
+          from pathlib import Path
+
+          manifest = Path("custom_components/cex/manifest.json")
+          text = manifest.read_text(encoding="utf-8")
+          text = text.replace(
+              "https://github.com/BrunoCunha1983-creator/ha_apps/tree/main/integrations/cex",
+              "https://github.com/BrunoCunha1983-creator/ha-cex",
+          )
+          text = text.replace(
+              "https://github.com/BrunoCunha1983-creator/ha_apps/issues",
+              "https://github.com/BrunoCunha1983-creator/ha-cex/issues",
+          )
+          manifest.write_text(text, encoding="utf-8")
+
+          readme = Path("README.md")
+          text = readme.read_text(encoding="utf-8")
+          text = text.replace(
+              "Integração não oficial para a **CeX Portugal**, organizada no monorepo `ha_apps`.",
+              "Integração não oficial para a **CeX Portugal** no Home Assistant. "
+              "Este repositório é o mirror HACS da integração mantida em "
+              "`ha_apps/integrations/cex`.",
+          )
+          hacs_section = """
+          ## Instalação com HACS
+
+          1. Abre **HACS → Integrações → Repositórios personalizados**.
+          2. Adiciona `BrunoCunha1983-creator/ha-cex` como **Integration**.
+          3. Instala ou atualiza **CeX Monitor**.
+          4. Reinicia o Home Assistant.
+          5. Em **Definições → Dispositivos e Serviços**, abre **CeX Monitor**.
+
+          A versão publicada neste repositório deve ser igual à versão do `manifest.json`.
+          """.strip()
+          if "## Instalação com HACS" not in text:
+              text = text.rstrip() + "\n\n" + hacs_section + "\n"
+          readme.write_text(text, encoding="utf-8")
+          PY
+
+      - name: Commit synchronized files
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo "CeX mirror already synchronized."
+          else
+            VERSION="$(python -c 'import json; print(json.load(open("custom_components/cex/manifest.json"))["version"])')"
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add README.md LICENSE hacs.json custom_components
+            git commit -m "Sync CeX Monitor v${VERSION} from ha_apps"
+            git push
+          fi
+
+      - name: Publish version release when missing
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VERSION="$(python -c 'import json; print(json.load(open("custom_components/cex/manifest.json"))["version"])')"
+          TAG="v${VERSION}"
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            echo "Release ${TAG} already exists."
+          else
+            gh release create "${TAG}"               --target main               --title "CeX Monitor ${TAG}"               --generate-notes
+          fi
