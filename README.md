@@ -60,3 +60,13 @@ Não são usados login, conta CeX, checkout, encomendas ou dados pessoais.
 - filtros por raio/loja;
 - ações para pesquisa e refresh;
 - suporte opcional a outras regiões CeX.
+
+## Instalação com HACS
+
+1. Abre **HACS → Integrações**.
+2. Em **Repositórios personalizados**, adiciona `BrunoCunha1983-creator/ha-cex` como **Integration**.
+3. Instala **CeX Monitor**.
+4. Reinicia o Home Assistant.
+5. Vai a **Definições → Dispositivos e Serviços → Adicionar integração** e procura **CeX Monitor**.
+
+O desenvolvimento principal desta integração é mantido no monorepo `BrunoCunha1983-creator/ha_apps`.
